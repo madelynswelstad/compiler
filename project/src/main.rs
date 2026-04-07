@@ -345,9 +345,44 @@ impl DFA {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
+
     if args.len() < 3 {
-        eprintln!("Usage: REC <cfg-file> <dfa-output-file> [token1] [token2 ...]");
+        eprintln!("Usage:");
+        eprintln!("  REC mode:   <program> REC <cfg-file> <input-lut> <output-file>");
+        eprintln!("  CHECK mode: <program> CHECK <cfg-file> <input-dat> <depth>");
         std::process::exit(1);
+    }
+
+    let mode = args[1].to_uppercase();
+    let cfg_file = &args[2];
+
+    match mode.as_str() {
+        "REC" => {
+            if args.len() < 5 {
+                eprintln!("REC mode requires: <cfg-file> <input-lut> <output-file>");
+                std::process::exit(1);
+            }
+            let input_file  = &args[3];
+            let output_file = &args[4];
+
+            // TODO: load CFG from cfg_file
+            // TODO: read input from input_file
+            // TODO: run recognizer and write results to output_file
+
+            println!("REC mode");
+            println!("  CFG file:    {}", cfg_file);
+            println!("  Input file:  {}", input_file);
+            println!("  Output file: {}", output_file);
+        }
+
+        "CHECK" => {
+            println!("We are undergrads, we dont have to implement this :)");
+        }
+
+        _ => {
+            eprintln!("Error: unknown mode '{}'. Expected REC or CHECK.", mode);
+            std::process::exit(1);
+        }
     }
 
     let nfa = NFA::file_to_tran_table(&args[1]).unwrap_or_else(|_| std::process::exit(1));

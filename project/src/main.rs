@@ -4,6 +4,8 @@ use std::io::Write;
 use std::collections::{HashMap, HashSet, BTreeSet};
 use std::fs;
 
+// Proof that i can push here -Thomas
+
 struct NFA {
     alphabet: Vec<char>,
     lambda: char,

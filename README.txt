@@ -1,1 +1,2 @@
 Madelyn Swelstad
+Thomas Dowd

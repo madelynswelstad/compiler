@@ -344,7 +344,7 @@ impl DFA {
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 3 {
-        eprintln!("Usage: NFAMATCH <nfa-file> <dfa-output-file> [token1] [token2 ...]");
+        eprintln!("Usage: REC <cfg-file> <dfa-output-file> [token1] [token2 ...]");
         std::process::exit(1);
     }
 

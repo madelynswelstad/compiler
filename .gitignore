@@ -1,6 +1,7 @@
 /target
 .env
 .devcontainer
+/fingerprint
 PROGRAM
 Cargo.lock
 .DS_Store

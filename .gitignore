@@ -2,3 +2,8 @@
 .devcontainer
 PROGRAM
 Cargo.lock
+luthor_submission
+luthor_with_inputs
+nfamatch_submission
+nfamatch_with_inputs
+.DS_Store

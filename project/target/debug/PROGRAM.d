@@ -1,1 +1,0 @@
-/workspace/compiler/project/target/debug/PROGRAM: /workspace/compiler/project/src/ast.rs /workspace/compiler/project/src/cfg.rs /workspace/compiler/project/src/grammar.rs /workspace/compiler/project/src/main.rs /workspace/compiler/project/src/nfa.rs

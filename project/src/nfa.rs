@@ -210,7 +210,53 @@ impl NFA {
         table
     }
 
-    
+    pub fn write_to_file(&self, path: &str, lambda_char: char) -> Result<(), std::io::Error> {
+        use std::io::Write;
+        let mut file = std::fs::File::create(path)?;
+
+        fn encode(c: char) -> String {
+            if (c as u8) < 32 || c == 'x' || c == '\\' || c == ':' || c.is_whitespace() {
+                format!("x{:02x}", c as u8)
+            } else {
+                c.to_string()
+            }
+        }
+
+        let n = self.next_state as usize;
+
+        // Line 1: num_states lambda alphabet
+        write!(file, "{} {}", n, encode(lambda_char))?;
+        for &c in &self.alphabet {
+            write!(file, " {}", encode(c))?;
+        }
+        writeln!(file)?;
+
+        // Non-lambda transitions
+        for (&from, trans) in &self.transitions {
+            for (&symbol, targets) in trans {
+                if symbol == LAMBDA { continue; }
+                for &to in targets {
+                    writeln!(file, "- {} {} {}", from, to, encode(symbol))?;
+                }
+            }
+        }
+
+        // Lambda transitions
+        for (&from, trans) in &self.transitions {
+            if let Some(targets) = trans.get(&LAMBDA) {
+                for &to in targets {
+                    writeln!(file, "- {} {} {}", from, to, encode(lambda_char))?;
+                }
+            }
+        }
+
+        // Accepting state
+        for &acc in &self.accepting {
+            writeln!(file, "+ {} {}", acc, acc)?;
+        }
+
+        Ok(())
+    }
 }
 
 // Printing utilities for debugging.

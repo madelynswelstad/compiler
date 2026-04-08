@@ -46,6 +46,15 @@ fn main() {
         process::exit(1);
     });
 
+    // Pick lambda char — first non-printable not in alphabet
+    let lambda_char = (0u8..=31u8)
+        .map(|b| b as char)
+        .find(|c| !alphabet.contains(c))
+        .unwrap_or_else(|| {
+            eprintln!("No lambda character available");
+            process::exit(1);
+        });
+
     // Remaining lines: first column is regex, second is token id, optional third is data
     for line in lines {
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -76,10 +85,49 @@ fn main() {
         let l   = nfa.build_lambda_matrix();
         let t   = nfa.build_transition_table();
 
-
         nfa::print_lambda_matrix(&l);
         nfa::print_transition_table(&t);
-        // TODO: Write the NFA to file in the form of NFAMatch
+
+        nfa.write_to_file(&format!("{}.nfa", token_id), lambda_char).unwrap_or_else(|e| {
+            eprintln!("Error writing NFA: {}", e);
+            process::exit(1);
+        });    
     }
     
+    // Write scan.u
+    let scan_u_path = format!("{}/scan.u", env::current_dir().unwrap_or_else(|e| {
+        eprintln!("Error getting current directory: {}", e);
+        process::exit(1);
+    }).display());
+    let mut scan_u = std::fs::File::create(&scan_u_path).unwrap_or_else(|e| {
+        eprintln!("Error creating scan.u: {}", e);
+        process::exit(1);
+    });
+
+    // Line 1: alphabet
+    use std::io::Write;
+    let alphabet_str: Vec<String> = alphabet.iter().map(|&c| {
+        if (c as u8) < 32 || c == 'x' || c == '\\' || c == ':' || c.is_whitespace() {
+            format!("x{:02x}", c as u8)
+        } else {
+            c.to_string()
+        }
+    }).collect();
+    writeln!(scan_u, "{}", alphabet_str.join(" ")).unwrap();
+
+    // One line per token
+    for line in scan_content.lines().filter(|l| !l.trim().is_empty()).skip(1) {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 2 { continue; }
+        let token_id = parts[1];
+        let category = parts.get(2).copied();
+
+        if let Some(cat) = category {
+            writeln!(scan_u, "{}.nfa\t\t\t{}\t\t{}", token_id, token_id, cat).unwrap();
+        } else {
+            writeln!(scan_u, "{}.nfa\t\t\t{}", token_id, token_id).unwrap();
+        }
+    }
+
+    println!("Written scan.u to '{}'", scan_u_path);
 }

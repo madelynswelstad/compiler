@@ -1,11 +1,14 @@
 use std::env;
 use std::fs;
 use std::process;
-
-mod ast;
 mod cfg;
-mod grammar;
+mod ast;
 mod nfa;
+mod silly_lexer;
+mod grammar;
+
+use cfg::CFG;
+use ast::build_ast;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -18,30 +21,57 @@ fn main() {
     let cfg_file = &args[2];
     let scan_file = &args[3];
 
-    // 1. Load regex grammar from llre.cfg
-    let grammar = cfg::CFG::from_file(cfg_file).unwrap_or_else(|e| {
+    let scan_content = fs::read_to_string(scan_file).unwrap_or_else(|e| {
+        eprintln!("Cannot read scan file '{}': {}", scan_file, e);
+        process::exit(1);
+    });
+
+    let mut lines = scan_content.lines().filter(|l| !l.trim().is_empty());
+
+    // First line is the alphabet
+    let alphabet_line = lines.next().unwrap_or_else(|| {
+        eprintln!("scan file is empty");
+        process::exit(1);
+    });
+
+    let alphabet = silly_lexer::decode_alphabet_line(alphabet_line).unwrap_or_else(|_| {
+        eprintln!("Failed to parse alphabet");
+        process::exit(1);
+    });
+
+    let cfg = CFG::from_file("llre.cfg").unwrap_or_else(|e| {
         eprintln!("CFG error: {}", e);
         process::exit(1);
     });
 
-    // 2. Parse the scanner output into a parse tree 
-    let tree = grammar.parse_scan_file(scan_file).unwrap_or_else(|e| {
-        eprintln!("Parse error: {}", e);
-        process::exit(1);
-    });
+    // Remaining lines: first column is regex, second is token id, optional third is data
+    for line in lines {
+        let parts: Vec<&str> = line.split_whitespace().collect();
 
-    let tree_str = tree.pretty(0);
-        fs::write("output_file", &tree_str).unwrap_or_else(|e| {
-        eprintln!("Cannot write output file '{}': {}", "output_file", e);
-        std::process::exit(1);
-    });
+        let regex_string = parts[0];
+        let token_id = parts[1];
+        let data = parts.get(2).copied(); // optional
 
-    // // 3. Convert the parse tree to an NFA 
-    // let nfa = nfa::NFA::from_ast(&tree).unwrap_or_else(|e| {
-    //     eprintln!("NFA construction error: {}", e);
-    //     process::exit(1);
-    // });
+        let re_tokens = silly_lexer::silly_lex(regex_string, &alphabet).unwrap_or_else(|bad_char| {
+            eprintln!("Lexical error: character '{}' not in alphabet", bad_char);
+            process::exit(4);
+        });
 
-    // 4. Write outputs 
-    // ...
+        // feed just categories to the LL(1) parser
+        let categories: Vec<String> = re_tokens.iter().map(|t| t.category.clone()).collect();
+        let tree = cfg.parse(&categories).unwrap_or_else(|e| {
+            eprintln!("Syntax error in regex '{}': {}", regex_string, e);
+            process::exit(2);
+        });
+
+        let ast = build_ast(&tree).unwrap_or_else(|e| {
+            eprintln!("AST error: {}", e);
+            process::exit(1);
+        });
+
+        println!("AST: {:#?}", ast);
+
+        // let nfa  = nfa::NFA::from_ast(&ast);
+        // nfa.write_to_file(...);
+    }
 }

@@ -79,7 +79,7 @@ impl CFG {
 
     fn parse_productions(src: &str) -> Result<Vec<Production>, String> {
         let mut productions: Vec<Production> = Vec::new();
-        let mut current_lhs: Option<String>  = None;
+        let mut current_lhs: Option<String> = None;
 
         for (lineno, raw) in src.lines().enumerate() {
             let line = raw.split('#').next().unwrap_or("").trim();
@@ -92,11 +92,25 @@ impl CFG {
                     return Err(format!("Line {}: LHS is empty", lineno + 1));
                 }
                 current_lhs = Some(lhs.clone());
-                productions.push(Production { lhs, rhs: Self::parse_rhs(rhs_s) });
+
+                // split RHS on ' | ' to handle inline alternatives
+                for alt in rhs_s.split(" | ") {
+                    productions.push(Production {
+                        lhs: lhs.clone(),
+                        rhs: Self::parse_rhs(alt.trim()),
+                    });
+                }
             } else if line.starts_with('|') {
                 let lhs = current_lhs.clone()
                     .ok_or_else(|| format!("Line {}: '|' without preceding rule", lineno + 1))?;
-                productions.push(Production { lhs, rhs: Self::parse_rhs(line[1..].trim()) });
+
+                // also handle inline alternatives on continuation lines
+                for alt in line[1..].split(" | ") {
+                    productions.push(Production {
+                        lhs: lhs.clone(),
+                        rhs: Self::parse_rhs(alt.trim()),
+                    });
+                }
             } else {
                 return Err(format!("Line {}: cannot parse '{}'", lineno + 1, line));
             }
@@ -289,7 +303,7 @@ impl CFG {
                     match &sym {
                         Symbol::Terminal(t) => {
                             if t == "lambda" {
-                                tree_stack.last_mut().unwrap().push(ParseTree::Lambda);
+                                tree_stack.last_mut().unwrap().push(ParseTree::Epsilon);
                             } else if *t == lookahead {
                                 input.pop_front();
                                 tree_stack.last_mut().unwrap().push(ParseTree::Leaf(t.clone()));
@@ -360,7 +374,6 @@ impl CFG {
 }
 
 // Debug helpers 
-
 impl CFG {
     pub fn print_first_follow(&self) {
         let mut nts: Vec<&String> = self.non_terminals.iter().collect();

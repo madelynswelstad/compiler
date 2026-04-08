@@ -57,14 +57,13 @@ fn main() {
             process::exit(4);
         });
 
-        // feed just categories to the LL(1) parser
-        let categories: Vec<String> = re_tokens.iter().map(|t| t.category.clone()).collect();
+        let categories: Vec<String> = re_tokens.iter().map(|t| t.0.clone()).collect();
         let tree = cfg.parse(&categories).unwrap_or_else(|e| {
             eprintln!("Syntax error in regex '{}': {}", regex_string, e);
             process::exit(2);
         });
 
-        let ast = build_ast(&tree).unwrap_or_else(|e| {
+        let ast = build_ast(&tree, &re_tokens, &mut 0).unwrap_or_else(|e| {
             eprintln!("AST error: {}", e);
             process::exit(1);
         });

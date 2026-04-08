@@ -42,15 +42,15 @@ impl ParseTree {
     }
 }
 
-pub fn build_ast(tree: &ParseTree) -> Result<AstNode, String> {
+pub fn build_ast(tree: &ParseTree, tokens: &[(String, Option<char>)], idx: &mut usize) -> Result<AstNode, String> {
     match tree {
         ParseTree::Interior { symbol, children } => {
             match symbol.as_str() {
-                "RE"      => build_ast(&children[0]), // unwrap to ALT
-                "ALT"     => build_alt(children),
-                "SEQ"     => build_seq(children),
-                "ATOM"    => build_atom(children),
-                "NUCLEUS" => build_nucleus(children),
+                "RE"      => build_ast(&children[0], tokens, idx),
+                "ALT"     => build_alt(children, tokens, idx),
+                "SEQ"     => build_seq(children, tokens, idx),
+                "ATOM"    => build_atom(children, tokens, idx),
+                "NUCLEUS" => build_nucleus(children, tokens, idx),
                 _ => Err(format!("unexpected symbol {}", symbol)),
             }
         }
@@ -59,32 +59,29 @@ pub fn build_ast(tree: &ParseTree) -> Result<AstNode, String> {
     }
 }
 
-// ALT -> SEQ ALTLIST
-fn build_alt(children: &[ParseTree]) -> Result<AstNode, String> {
+fn build_alt(children: &[ParseTree], tokens: &[(String, Option<char>)], idx: &mut usize) -> Result<AstNode, String> {
     let seq = build_seq(match &children[0] {
         ParseTree::Interior { children, .. } => children,
         _ => return Err("ALT: expected SEQ".into()),
-    })?;
-    build_altlist(seq, &children[1])
+    }, tokens, idx)?;
+    build_altlist(seq, &children[1], tokens, idx)
 }
 
-// ALTLIST -> pipe SEQ ALTLIST | lambda
-fn build_altlist(left: AstNode, tree: &ParseTree) -> Result<AstNode, String> {
+fn build_altlist(left: AstNode, tree: &ParseTree, tokens: &[(String, Option<char>)], idx: &mut usize) -> Result<AstNode, String> {
     match tree {
         ParseTree::Epsilon => Ok(left),
         ParseTree::Interior { symbol, children } if symbol == "ALTLIST" => {
             match children.as_slice() {
-                // lambda production
                 [] => Ok(left),
                 [ParseTree::Epsilon] => Ok(left),
-                // pipe SEQ ALTLIST
                 [_, seq, altlist] => {
+                    *idx += 1; // consume pipe
                     let right = build_seq(match seq {
                         ParseTree::Interior { children, .. } => children,
                         _ => return Err("ALTLIST: expected SEQ".into()),
-                    })?;
+                    }, tokens, idx)?;
                     let node = AstNode::Alt(Box::new(left), Box::new(right));
-                    build_altlist(node, altlist)
+                    build_altlist(node, altlist, tokens, idx)
                 }
                 _ => Err("ALTLIST: unexpected shape".into()),
             }
@@ -93,100 +90,98 @@ fn build_altlist(left: AstNode, tree: &ParseTree) -> Result<AstNode, String> {
     }
 }
 
-// SEQ -> ATOM SEQLIST | lambda
-fn build_seq(children: &[ParseTree]) -> Result<AstNode, String> {
+fn build_seq(children: &[ParseTree], tokens: &[(String, Option<char>)], idx: &mut usize) -> Result<AstNode, String> {
     match children {
-        [] => Ok(AstNode::Lambda),
-        [ParseTree::Epsilon] => Ok(AstNode::Lambda),
+        [] | [ParseTree::Epsilon] => Ok(AstNode::Lambda),
         [atom, seqlist] => {
             let left = build_atom(match atom {
                 ParseTree::Interior { children, .. } => children,
                 _ => return Err("SEQ: expected ATOM".into()),
-            })?;
-            build_seqlist(left, seqlist)
+            }, tokens, idx)?;
+            build_seqlist(left, seqlist, tokens, idx)
         }
-        _ => Err("SEQ: unexpected shape".into()),
+        _ => Err(format!("SEQ: unexpected shape: {:?}", children)),
     }
 }
 
-// SEQLIST -> ATOM SEQLIST | lambda
-fn build_seqlist(left: AstNode, tree: &ParseTree) -> Result<AstNode, String> {
+fn build_seqlist(left: AstNode, tree: &ParseTree, tokens: &[(String, Option<char>)], idx: &mut usize) -> Result<AstNode, String> {
     match tree {
         ParseTree::Epsilon => Ok(left),
         ParseTree::Interior { symbol, children } if symbol == "SEQLIST" => {
             match children.as_slice() {
-                [] => Ok(left),
-                [ParseTree::Epsilon] => Ok(left),
+                [] | [ParseTree::Epsilon] => Ok(left),
                 [atom, seqlist] => {
                     let right = build_atom(match atom {
                         ParseTree::Interior { children, .. } => children,
                         _ => return Err("SEQLIST: expected ATOM".into()),
-                    })?;
+                    }, tokens, idx)?;
                     let node = AstNode::Seq(Box::new(left), Box::new(right));
-                    build_seqlist(node, seqlist)
+                    build_seqlist(node, seqlist, tokens, idx)
                 }
-                _ => Err("SEQLIST: unexpected shape".into()),
+                _ => Err(format!("SEQLIST: unexpected shape: {:?}", children)),
             }
         }
         _ => Ok(left),
     }
 }
 
-// ATOM -> NUCLEUS ATOMMOD
-fn build_atom(children: &[ParseTree]) -> Result<AstNode, String> {
+fn build_atom(children: &[ParseTree], tokens: &[(String, Option<char>)], idx: &mut usize) -> Result<AstNode, String> {
     match children {
         [nucleus, atommod] => {
             let inner = build_nucleus(match nucleus {
                 ParseTree::Interior { children, .. } => children,
                 _ => return Err("ATOM: expected NUCLEUS".into()),
-            })?;
-            build_atommod(inner, atommod)
+            }, tokens, idx)?;
+            build_atommod(inner, atommod, tokens, idx)
         }
         _ => Err("ATOM: unexpected shape".into()),
     }
 }
 
-// ATOMMOD -> kleene | plus | lambda
-fn build_atommod(inner: AstNode, tree: &ParseTree) -> Result<AstNode, String> {
+fn build_atommod(inner: AstNode, tree: &ParseTree, tokens: &[(String, Option<char>)], idx: &mut usize) -> Result<AstNode, String> {
     match tree {
         ParseTree::Epsilon => Ok(inner),
         ParseTree::Interior { symbol, children } if symbol == "ATOMMOD" => {
             match children.as_slice() {
-                [ParseTree::Leaf(t)] if t == "kleene" => Ok(AstNode::Star(Box::new(inner))),
-                [ParseTree::Leaf(t)] if t == "plus"   => Ok(AstNode::Plus(Box::new(inner))),
-                _ => Ok(inner), // lambda
+                [ParseTree::Leaf(t)] if t == "kleene" => {
+                    *idx += 1; // consume kleene
+                    Ok(AstNode::Star(Box::new(inner)))
+                }
+                [ParseTree::Leaf(t)] if t == "plus" => {
+                    *idx += 1; // consume plus
+                    Ok(AstNode::Plus(Box::new(inner)))
+                }
+                _ => Ok(inner),
             }
         }
         _ => Ok(inner),
     }
 }
 
-// NUCLEUS -> open ALT close | char CHARRNG | dot
-fn build_nucleus(children: &[ParseTree]) -> Result<AstNode, String> {
+fn build_nucleus(children: &[ParseTree], tokens: &[(String, Option<char>)], idx: &mut usize) -> Result<AstNode, String> {
     match children {
-        // dot
-        [ParseTree::Leaf(t)] if t == "dot" => Ok(AstNode::Dot),
-
-        // open ALT close
+        [ParseTree::Leaf(t)] if t == "dot" => {
+            *idx += 1; // consume dot
+            Ok(AstNode::Dot)
+        }
         [ParseTree::Leaf(o), alt, ParseTree::Leaf(c)]
             if o == "open" && c == "close" =>
         {
-            build_ast(alt)
+            *idx += 1; // consume open
+            let inner = build_ast(alt, tokens, idx)?;
+            *idx += 1; // consume close
+            Ok(inner)
         }
-
-        // char CHARRNG
         [ParseTree::Leaf(ch), charrng] if ch == "char" => {
-            // TODO: we need the actual char value here, not just "char"
-            // this will need updating when we thread char values through
-            build_charrng('?', charrng)
+            let c = tokens[*idx].1.ok_or("char token has no value")?;
+            *idx += 1; // consume char
+            build_charrng(c, charrng, tokens, idx)
         }
-
         _ => Err("NUCLEUS: unexpected shape".into()),
     }
 }
 
-// CHARRNG -> dash char | lambda
-fn build_charrng(left_char: char, tree: &ParseTree) -> Result<AstNode, String> {
+fn build_charrng(left_char: char, tree: &ParseTree, tokens: &[(String, Option<char>)], idx: &mut usize) -> Result<AstNode, String> {
     match tree {
         ParseTree::Epsilon => Ok(AstNode::Ch(left_char)),
         ParseTree::Interior { symbol, children } if symbol == "CHARRNG" => {
@@ -194,8 +189,10 @@ fn build_charrng(left_char: char, tree: &ParseTree) -> Result<AstNode, String> {
                 [ParseTree::Leaf(d), ParseTree::Leaf(r)]
                     if d == "dash" && r == "char" =>
                 {
-                    // TODO: need actual char value for range end too
-                    Ok(AstNode::Range(left_char, '?'))
+                    *idx += 1; // consume dash
+                    let right_char = tokens[*idx].1.ok_or("char token has no value")?;
+                    *idx += 1; // consume char
+                    Ok(AstNode::Range(left_char, right_char))
                 }
                 _ => Ok(AstNode::Ch(left_char)),
             }

@@ -13,35 +13,42 @@ impl Token {
     }
 }
 
-pub fn silly_lex(regex: &str, alphabet: &[char]) -> Result<Vec<Token>, char> {
-    let regex = regex.replace("\\s", "(x20|x0a)");
-    
+pub fn silly_lex(regex: &str, alphabet: &[char]) -> Result<Vec<(String, Option<char>)>, char> {
+    let whitespace_chars: Vec<String> = alphabet.iter()
+        .filter(|c| c.is_whitespace())
+        .map(|c| format!("x{:02x}", *c as u8))
+        .collect();
+
+    let regex = if whitespace_chars.is_empty() {
+        regex.to_string()
+    } else {
+        let expanded = format!("({})", whitespace_chars.join("|"));
+        regex.replace("\\s", &expanded)
+    };
+
     let mut tokens = Vec::new();
     let mut chars = regex.chars().peekable();
 
     while let Some(c) = chars.next() {
         let tok = match c {
-            '|'  => Token::meta("pipe"),
-            '('  => Token::meta("open"),
-            ')'  => Token::meta("close"),
-            '*'  => Token::meta("kleene"),
-            '+'  => Token::meta("plus"),
-            '.'  => Token::meta("dot"),
-            '-'  => Token::meta("dash"),
+            '|'  => ("pipe".to_string(),   None),
+            '('  => ("open".to_string(),   None),
+            ')'  => ("close".to_string(),  None),
+            '*'  => ("kleene".to_string(), None),
+            '+'  => ("plus".to_string(),   None),
+            '.'  => ("dot".to_string(),    None),
+            '-'  => ("dash".to_string(),   None),
             '\\' => {
                 match chars.next() {
                     Some(next) => {
-                        if !alphabet.contains(&next) {
-                            return Err(next); // exit code 4
-                        }
-                        Token::char_tok(next)
+                        if !alphabet.contains(&next) { return Err(next); }
+                        ("char".to_string(), Some(next))
                     }
                     None => return Err('\\'),
                 }
             }
             ' ' | '\t' => continue,
             'x' => {
-                // consume next two hex digits
                 let h1 = chars.next().ok_or('x')?;
                 let h2 = chars.next().ok_or('x')?;
                 let hex = format!("{}{}", h1, h2);
@@ -50,13 +57,11 @@ pub fn silly_lex(regex: &str, alphabet: &[char]) -> Result<Vec<Token>, char> {
                 if !alphabet.contains(&c) {
                     return Err(c);
                 }
-                Token::char_tok(c)
+                ("char".to_string(), Some(c))
             }
             _ => {
-                if !alphabet.contains(&c) {
-                    return Err(c); // exit code 4
-                }
-                Token::char_tok(c)
+                if !alphabet.contains(&c) { return Err(c); }
+                ("char".to_string(), Some(c))
             }
         };
         tokens.push(tok);

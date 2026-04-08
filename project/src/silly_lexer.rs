@@ -22,7 +22,9 @@ pub fn silly_lex(regex: &str, alphabet: &[char]) -> Result<Vec<(String, Option<c
     let regex = if whitespace_chars.is_empty() {
         regex.to_string()
     } else {
-        let expanded = format!("({})", whitespace_chars.join("|"));
+        // let expanded = format!("({})", whitespace_chars.join("|")); 
+        //  This bit of code seemed to have been broken ^.
+        let expanded = whitespace_chars.join("|");
         regex.replace("\\s", &expanded)
     };
 

@@ -10,6 +10,8 @@ mod grammar;
 use cfg::CFG;
 use ast::build_ast;
 
+
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -68,9 +70,16 @@ fn main() {
             process::exit(1);
         });
 
-        println!("AST: {:#?}", ast);
+        // println!("AST: {:#?}", ast);
 
-        // let nfa  = nfa::NFA::from_ast(&ast);
-        // nfa.write_to_file(...);
+        let nfa = nfa::NFA::from_ast(&ast, alphabet.clone());
+        let l   = nfa.build_lambda_matrix();
+        let t   = nfa.build_transition_table();
+
+
+        nfa::print_lambda_matrix(&l);
+        nfa::print_transition_table(&t);
+        // TODO: Write the NFA to file in the form of NFAMatch
     }
+    
 }

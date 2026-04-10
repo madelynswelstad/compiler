@@ -1,3 +1,4 @@
+// grammar.rs
 #[derive(Clone, Debug)]
 pub enum Symbol {
     Terminal(String),

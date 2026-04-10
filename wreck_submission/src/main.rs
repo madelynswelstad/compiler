@@ -71,13 +71,30 @@ fn main() {
         let categories: Vec<String> = re_tokens.iter().map(|t| t.0.clone()).collect();
         let tree = cfg.parse(&categories).unwrap_or_else(|e| {
             eprintln!("Syntax error in regex '{}': {}", regex_string, e);
-            process::exit(2);
+            process::exit(3);
         });
 
-        let ast = build_ast(&tree, &re_tokens, &mut 0).unwrap_or_else(|e| {
-            eprintln!("AST error: {}", e);
-            process::exit(1);
-        });
+        // let ast = build_ast(&tree, &re_tokens, &mut 0).unwrap_or_else(|e| {
+        //     eprintln!("AST error: {}", e);
+        //     process::exit(1);
+        // });
+
+        let mut idx = 0;
+        let ast = match build_ast(&tree, &re_tokens, &mut idx, &alphabet) {
+            Ok(a) => a,
+            Err(e) if e.starts_with("LEX:") => {
+                eprintln!("Lexical error: {}", &e[4..]);
+                process::exit(4);
+            }
+            Err(e) if e.starts_with("SEM:") => {
+                eprintln!("Semantic error: {}", &e[4..]);
+                process::exit(3);
+            }
+            Err(e) => {
+                eprintln!("Internal error: {}", e);
+                process::exit(1);
+            }
+        };
 
         // println!("AST: {:#?}", ast);
 
@@ -131,3 +148,12 @@ fn main() {
 
     println!("Written scan.u to '{}'", scan_u_path);
 }
+
+// THOMAS TODO:
+// - Exit:
+//  - 4: Lexical error
+//  - 3: Semantic error
+//  - 2: Syntax error
+// - generate correct scan.u files
+// - generate correct NFA Files
+

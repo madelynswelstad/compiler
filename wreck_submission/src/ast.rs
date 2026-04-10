@@ -196,7 +196,7 @@ fn build_charrng(left_char: char, tree: &ParseTree, tokens: &[(String, Option<ch
 
                     if left_char > right_char {
                         return Err(format!(
-                            "SEM:range '{}-{}' is invalid: start must be <= end",
+                            "SEM:range '{}'-'{}' is invalid: start must be <= end",
                             left_char, right_char
                         ));
                     }

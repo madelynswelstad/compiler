@@ -105,6 +105,7 @@ fn main() {
         nfa::print_lambda_matrix(&l);
         nfa::print_transition_table(&t);
 
+        // let nfa_filename = format!("{}.tt", token_id);
         let nfa_filename = format!("{}.nfa", token_id);
         nfa.write_to_file(&nfa_filename, lambda_char).unwrap_or_else(|e| {
             eprintln!("Error writing NFA '{}': {}", nfa_filename, e);
@@ -143,9 +144,9 @@ fn main() {
         let category = parts.get(2).copied();
 
         if let Some(cat) = category {
-            writeln!(scan_u, "{}.nfa\t\t\t{}\t\t{}", token_id, token_id, cat).unwrap();
+            writeln!(scan_u, "{}.tt\t\t\t{}\t\t{}", token_id, token_id, cat).unwrap();
         } else {
-            writeln!(scan_u, "{}.nfa\t\t\t{}", token_id, token_id).unwrap();
+            writeln!(scan_u, "{}.tt\t\t\t{}", token_id, token_id).unwrap();
         }
     }
 
